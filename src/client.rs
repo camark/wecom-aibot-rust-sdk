@@ -24,6 +24,7 @@ use crate::ws::WsConnectionManager;
 /// 基于 tokio 异步运行时，提供 WebSocket 长连接消息收发能力。
 #[derive(Clone)]
 pub struct WSClient {
+    #[allow(dead_code)]
     options: WSClientOptions,
     logger: Arc<dyn Logger>,
     started: Arc<RwLock<bool>>,

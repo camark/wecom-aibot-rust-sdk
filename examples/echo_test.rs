@@ -68,13 +68,17 @@ async fn main() {
             let stream_id = generate_req_id("stream");
 
             println!("📤 正在回复：{}", text_content);
+            println!("🔍 使用 frame req_id: {}", frame.headers.req_id);
 
             // 使用流式回复
             match client_text
                 .reply_stream(&frame, &stream_id, &text_content, true, None, None)
                 .await
             {
-                Ok(_) => println!("✅ 回复成功"),
+                Ok(reply_frame) => {
+                    println!("✅ 回复成功，回执：cmd={:?}, errcode={:?}",
+                        reply_frame.cmd, reply_frame.errcode);
+                },
                 Err(e) => eprintln!("❌ 回复失败：{}", e),
             }
         });

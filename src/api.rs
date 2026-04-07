@@ -1,7 +1,7 @@
 /// 企业微信 API 客户端
 ///
 /// 对标 Node.js SDK src/api.ts
-/// 仅负责文件下载等 HTTP 辅助功能，消息收发均走 WebSocket 通道。
+/// 负责文件下载等 HTTP 辅助功能，以及通过 response_url 发送消息回复。
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -81,6 +81,59 @@ impl WeComApiClient {
         }
 
         None
+    }
+
+    /// 通过 response_url 发送回复消息
+    ///
+    /// # Arguments
+    /// * `response_url` - 企业微信返回的回复地址
+    /// * `body` - 回复消息体
+    ///
+    /// # Returns
+    /// 返回响应结果
+    pub async fn send_reply_to_response_url(
+        &self,
+        response_url: &str,
+        body: serde_json::Value,
+    ) -> Result<(), SdkError> {
+        self.logger
+            .info(&format!("Sending reply to response_url: {}", response_url));
+        self.logger
+            .debug(&format!("Request body: {}", body));
+
+        let response = self
+            .client
+            .post(response_url)
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = response.status();
+        self.logger
+            .debug(&format!("Response status: {}", status));
+
+        let response = response.error_for_status()?;
+        let result: serde_json::Value = response.json().await?;
+
+        self.logger
+            .debug(&format!("Response URL reply result: {:?}", result));
+
+        // 检查返回的 errcode
+        if let Some(code) = result.get("errcode").and_then(|v| v.as_i64()) {
+            if code != 0 {
+                let errmsg = result
+                    .get("errmsg")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown error");
+                return Err(SdkError::Http(format!(
+                    "response_url reply failed: errcode={}, errmsg={}",
+                    code, errmsg
+                )));
+            }
+        }
+
+        self.logger.info("Response URL reply sent successfully");
+        Ok(())
     }
 }
 

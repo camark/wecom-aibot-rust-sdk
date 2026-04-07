@@ -236,6 +236,15 @@ pub struct WsFrame {
 }
 
 impl WsFrame {
+    /// 获取 response_url（如果存在）
+    pub fn response_url(&self) -> Option<String> {
+        self.body.as_ref().and_then(|b| {
+            b.as_object()?.get("response_url")?.as_str().map(String::from)
+        })
+    }
+}
+
+impl WsFrame {
     pub fn new(cmd: impl Into<String>, headers: WsFrameHeaders) -> Self {
         Self {
             cmd: Some(cmd.into()),
