@@ -60,3 +60,7 @@ path = "examples/echo_test.rs"
 [[example]]
 name = "test_files"
 path = "examples/test_files.rs"
+
+[[example]]
+name = "sender_info"
+path = "examples/sender_info.rs"
