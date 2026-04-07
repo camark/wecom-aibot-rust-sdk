@@ -155,6 +155,48 @@ async fn main() {
 }
 ```
 
+## 📚 示例说明
+
+SDK 提供了多个示例代码，位于 `examples/` 目录下：
+
+### 1. basic.rs - 基础使用示例
+
+演示基本的连接、消息监听和回复功能。
+
+```bash
+cargo run --example basic
+```
+
+### 2. echo_test.rs - Echo 测试机器人
+
+收到消息后自动原样回复，适合测试基本功能。
+
+```bash
+cargo run --example echo_test
+```
+
+### 3. test_files.rs - 文件/图片下载测试
+
+演示如何下载和解密企业微信发送的图片和文件，支持：
+- 下载加密图片并保存
+- 下载加密文件并保存
+- 自动处理未加密的文件（如截屏图片）
+
+```bash
+cargo run --example test_files
+```
+
+### 4. sender_info.rs - 消息发送人信息示例
+
+演示如何获取消息发送人的详细信息，包括：
+- 发送人 userid
+- 发送人 username（如果可用）
+- 发送人 gender（如果可用）
+
+```bash
+cargo run --example sender_info
+```
+
 ## 📖 API 文档
 
 ### `WSClient`
@@ -405,7 +447,8 @@ rust_wecom_bot_rust_sdk/
 ├── examples/
 │   ├── basic.rs           # 基础使用示例
 │   ├── echo_test.rs       # Echo 测试机器人
-│   └── test_files.rs      # 文件/图片下载测试
+│   ├── test_files.rs      # 文件/图片下载测试
+│   └── sender_info.rs     # 消息发送人信息示例
 ├── Cargo.toml             # 项目配置
 ├── README.md              # 本文件
 └── .env.example           # 环境变量示例
