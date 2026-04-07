@@ -2,11 +2,11 @@
 name = "wecom-aibot-rust-sdk"
 version = "1.0.0"
 edition = "2021"
-authors = ["WeCom <wecom@tencent.com>"]
+authors = ["camark <camark@live.cn>"]
 description = "企业微信智能机器人 Rust SDK —— 基于 WebSocket 长连接通道，提供消息收发、流式回复、模板卡片、事件回调、文件下载解密等核心能力"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/WecomTeam/wecom-aibot-rust-sdk"
+repository = "https://github.com/camark/wecom-aibot-rust-sdk"
 keywords = ["wecom", "wechat-work", "aibot", "websocket", "sdk"]
 categories = ["api-bindings", "asynchronous", "network-programming"]
 
