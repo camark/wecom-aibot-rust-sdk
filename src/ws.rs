@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
-use parking_lot::Mutex;
 use serde_json::json;
+use tokio::sync::Mutex;
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time;
@@ -63,14 +63,15 @@ pub struct WsConnectionManager {
     pending_acks: Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<Result<WsFrame, SdkError>>>>>,
     processing_queues: Arc<Mutex<std::collections::HashSet<String>>>,
 
-    // 事件接收器
+    // 事件通道
+    event_tx: mpsc::UnboundedSender<WsFrame>,
     event_rx: Arc<Mutex<Option<mpsc::UnboundedReceiver<WsFrame>>>>,
 }
 
 impl WsConnectionManager {
     /// 创建新的 WebSocket 连接管理器
     pub fn new(options: WSClientOptions, logger: Arc<dyn Logger>) -> Self {
-        let (_event_tx, event_rx) = mpsc::unbounded_channel::<WsFrame>();
+        let (event_tx, event_rx) = mpsc::unbounded_channel::<WsFrame>();
 
         Self {
             logger,
@@ -84,18 +85,19 @@ impl WsConnectionManager {
             reply_queues: Arc::new(Mutex::new(std::collections::HashMap::new())),
             pending_acks: Arc::new(Mutex::new(std::collections::HashMap::new())),
             processing_queues: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            event_tx,
             event_rx: Arc::new(Mutex::new(Some(event_rx))),
         }
     }
 
     /// 获取事件接收器
-    pub fn get_event_receiver(&self) -> mpsc::UnboundedReceiver<WsFrame> {
-        self.event_rx.lock().take().expect("Event receiver already taken")
+    pub async fn get_event_receiver(&self) -> mpsc::UnboundedReceiver<WsFrame> {
+        self.event_rx.lock().await.take().expect("Event receiver already taken")
     }
 
     /// 建立 WebSocket 连接
     pub async fn connect(&self) -> Result<(), SdkError> {
-        *self.is_manual_close.lock() = false;
+        *self.is_manual_close.lock().await = false;
 
         let ws_url = self.options.ws_url.as_deref().unwrap_or(DEFAULT_WS_URL);
         self.logger.info(&format!("Connecting to WebSocket: {}...", ws_url));
@@ -129,8 +131,8 @@ impl WsConnectionManager {
         let (mut ws_write, mut ws_read) = ws_stream.split();
         let (msg_tx, mut msg_rx) = mpsc::unbounded_channel::<Message>();
 
-        *self.ws_tx.lock() = Some(msg_tx);
-        *self.state.lock() = ConnectionState::Connected;
+        *self.ws_tx.lock().await = Some(msg_tx);
+        *self.state.lock().await = ConnectionState::Connected;
         self.reconnect_attempts.store(0, Ordering::SeqCst);
         self.missed_pong_count.store(0, Ordering::SeqCst);
 
@@ -148,6 +150,7 @@ impl WsConnectionManager {
         let heartbeat_interval = self.options.heartbeat_interval;
         let reconnect_attempts = self.reconnect_attempts.clone();
         let is_manual_close = self.is_manual_close.clone();
+        let event_tx = self.event_tx.clone();
 
         tokio::spawn(async move {
             Self::_receive_loop(
@@ -163,6 +166,7 @@ impl WsConnectionManager {
                 heartbeat_interval,
                 &reconnect_attempts,
                 &is_manual_close,
+                &event_tx,
             ).await;
         });
 
@@ -182,6 +186,7 @@ impl WsConnectionManager {
         heartbeat_interval: u64,
         _reconnect_attempts: &Arc<AtomicUsize>,
         _is_manual_close: &Arc<Mutex<bool>>,
+        event_tx: &mpsc::UnboundedSender<WsFrame>,
     ) {
         let mut heartbeat_interval = time::interval(Duration::from_millis(heartbeat_interval));
 
@@ -199,6 +204,7 @@ impl WsConnectionManager {
                                         reply_queues,
                                         pending_acks,
                                         missed_pong_count,
+                                        event_tx,
                                     ).await;
                                 }
                             }
@@ -228,7 +234,7 @@ impl WsConnectionManager {
                         errmsg: None,
                     };
 
-                    if let Some(tx) = ws_tx.lock().as_ref() {
+                    if let Some(tx) = ws_tx.lock().await.as_ref() {
                         let _ = tx.send(Message::Text(serde_json::to_string(&heartbeat_frame).unwrap_or_default()));
                     }
                 }
@@ -268,12 +274,14 @@ impl WsConnectionManager {
         reply_queues: &Arc<Mutex<std::collections::HashMap<String, Vec<ReplyQueueItem>>>>,
         pending_acks: &Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<Result<WsFrame, SdkError>>>>>,
         missed_pong_count: &Arc<AtomicUsize>,
+        event_tx: &mpsc::UnboundedSender<WsFrame>,
     ) {
         let cmd = frame.cmd.as_deref();
 
-        // 消息推送
+        // 消息推送回调 - 转发到事件通道
         if cmd == Some(WsCmd::CALLBACK) || cmd == Some(WsCmd::EVENT_CALLBACK) {
             logger.debug(&format!("Received push message: {:?}", frame.body));
+            let _ = event_tx.send(frame.clone());
             return;
         }
 
@@ -281,7 +289,7 @@ impl WsConnectionManager {
         let req_id = frame.headers.req_id.as_str();
 
         // 检查是否是回复消息的回执
-        if pending_acks.lock().contains_key(req_id) {
+        if pending_acks.lock().await.contains_key(req_id) {
             Self::_handle_reply_ack(req_id, frame, pending_acks, reply_queues, logger).await;
             return;
         }
@@ -298,7 +306,7 @@ impl WsConnectionManager {
                 return;
             }
             logger.info("Authentication successful");
-            *state.lock() = ConnectionState::Authenticated;
+            *state.lock().await = ConnectionState::Authenticated;
             missed_pong_count.store(0, Ordering::SeqCst);
             return;
         }
@@ -330,7 +338,7 @@ impl WsConnectionManager {
         reply_queues: &Arc<Mutex<std::collections::HashMap<String, Vec<ReplyQueueItem>>>>,
         logger: &Arc<dyn Logger>,
     ) {
-        let tx = pending_acks.lock().remove(req_id);
+        let tx = pending_acks.lock().await.remove(req_id);
         if let Some(tx) = tx {
             let errcode = frame.errcode.unwrap_or(-1);
             if errcode != 0 {
@@ -351,7 +359,7 @@ impl WsConnectionManager {
             }
 
             // 处理队列中的下一项
-            let mut queues = reply_queues.lock();
+            let mut queues = reply_queues.lock().await;
             if let Some(queue) = queues.get_mut(req_id) {
                 if !queue.is_empty() {
                     queue.remove(0);
@@ -365,7 +373,7 @@ impl WsConnectionManager {
 
     /// 发送数据帧
     pub async fn send(&self, frame: &WsFrame) -> Result<(), SdkError> {
-        let ws_tx = self.ws_tx.lock();
+        let ws_tx = self.ws_tx.lock().await;
         if let Some(tx) = ws_tx.as_ref() {
             let msg = Message::Text(serde_json::to_string(frame)?);
             tx.send(msg).map_err(|e| {
@@ -396,7 +404,7 @@ impl WsConnectionManager {
 
         let item = ReplyQueueItem { frame, tx };
 
-        let mut queues = self.reply_queues.lock();
+        let mut queues = self.reply_queues.lock().await;
         let queue = queues.entry(req_id.to_string()).or_insert_with(Vec::new);
 
         if queue.len() >= 100 {
@@ -437,35 +445,36 @@ impl WsConnectionManager {
             reply_queues: self.reply_queues.clone(),
             pending_acks: self.pending_acks.clone(),
             processing_queues: self.processing_queues.clone(),
+            event_tx: self.event_tx.clone(),
             event_rx: Arc::new(Mutex::new(None)),
         }
     }
 
     async fn _process_reply_queue(&self, req_id: &str) {
-        self.processing_queues.lock().insert(req_id.to_string());
+        self.processing_queues.lock().await.insert(req_id.to_string());
 
         loop {
             // 检查队列长度
             let queue_len = {
-                let queues = self.reply_queues.lock();
+                let queues = self.reply_queues.lock().await;
                 queues.get(req_id).map(|q| q.len()).unwrap_or(0)
             };
 
             if queue_len == 0 {
-                self.reply_queues.lock().remove(req_id);
+                self.reply_queues.lock().await.remove(req_id);
                 break;
             }
 
             // 获取队首元素
             let item_opt = {
-                let queues = self.reply_queues.lock();
+                let queues = self.reply_queues.lock().await;
                 queues.get(req_id).and_then(|q| q.first().map(|item| item.frame.clone()))
             };
 
             let frame = match item_opt {
                 Some(f) => f,
                 None => {
-                    self.reply_queues.lock().remove(req_id);
+                    self.reply_queues.lock().await.remove(req_id);
                     break;
                 }
             };
@@ -480,14 +489,14 @@ impl WsConnectionManager {
                 }
                 Err(e) => {
                     self.logger.error(&format!("Failed to send reply for reqId {}: {}", req_id, e));
-                    self.reply_queues.lock().remove(req_id);
+                    self.reply_queues.lock().await.remove(req_id);
                     break;
                 }
             }
 
             // 设置超时
             let (ack_tx, ack_rx) = oneshot::channel();
-            self.pending_acks.lock().insert(req_id.to_string(), ack_tx);
+            self.pending_acks.lock().await.insert(req_id.to_string(), ack_tx);
 
             let timeout = time::sleep(Duration::from_secs(5));
             tokio::pin!(timeout);
@@ -514,7 +523,7 @@ impl WsConnectionManager {
 
             // 移除已处理的项目
             {
-                let mut queues = self.reply_queues.lock();
+                let mut queues = self.reply_queues.lock().await;
                 if let Some(queue) = queues.get_mut(req_id) {
                     if !queue.is_empty() {
                         queue.remove(0);
@@ -523,22 +532,22 @@ impl WsConnectionManager {
             }
 
             if queue_len <= 1 {
-                self.reply_queues.lock().remove(req_id);
+                self.reply_queues.lock().await.remove(req_id);
                 break;
             }
         }
 
-        self.processing_queues.lock().remove(req_id);
+        self.processing_queues.lock().await.remove(req_id);
     }
 
     /// 主动断开连接
     pub fn disconnect(&self) {
-        *self.is_manual_close.lock() = true;
+        *self.is_manual_close.blocking_lock() = true;
         self.logger.info("WebSocket connection manually closed");
     }
 
     /// 获取当前连接状态
     pub fn is_connected(&self) -> bool {
-        *self.state.lock() == ConnectionState::Authenticated
+        *self.state.blocking_lock() == ConnectionState::Authenticated
     }
 }

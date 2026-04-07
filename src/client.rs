@@ -7,11 +7,12 @@ use std::sync::Arc;
 
 use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
+use tokio::sync::mpsc;
 
 use crate::api::WeComApiClient;
 use crate::crypto_utils::decrypt_file;
 use crate::logger::DefaultLogger;
-use crate::message_handler::MessageHandler;
+use crate::message_handler::{MessageEvent, MessageHandler};
 use crate::types::{
     Logger, SdkError, WsCmd, WsFrame, WSClientOptions,
 };
@@ -131,7 +132,92 @@ impl WSClient {
 
         self.ws_manager.connect().await?;
 
+        // 启动接收循环，处理消息回调
+        self._start_receive_loop();
+
         Ok(())
+    }
+
+    /// 启动接收循环，处理收到的消息并调用用户注册的回调
+    fn _start_receive_loop(&self) {
+        let ws_manager = self.ws_manager.clone();
+        let event_handlers = self.event_handlers.clone();
+        let message_handler = self.message_handler.clone();
+        let logger = self.logger.clone();
+
+        tokio::spawn(async move {
+            let event_rx = ws_manager.get_event_receiver().await;
+            Self::_receive_loop(event_rx, event_handlers, message_handler, logger).await;
+        });
+    }
+
+    async fn _receive_loop(
+        mut event_rx: mpsc::UnboundedReceiver<WsFrame>,
+        event_handlers: Arc<Mutex<EventHandlers>>,
+        message_handler: Arc<MessageHandler>,
+        _logger: Arc<dyn Logger>,
+    ) {
+        while let Some(frame) = event_rx.recv().await {
+            // 解析帧并获取事件列表
+            let events = message_handler.handle_frame(&frame);
+
+            // 调用对应的回调
+            for event in events {
+                let handlers = event_handlers.lock().await;
+                match event {
+                    MessageEvent::Message(f) => {
+                        for handler in &handlers.message {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::Text(f) => {
+                        for handler in &handlers.message_text {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::Image(f) => {
+                        for handler in &handlers.message_image {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::Mixed(f) => {
+                        for handler in &handlers.message_mixed {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::Voice(f) => {
+                        for handler in &handlers.message_voice {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::File(f) => {
+                        for handler in &handlers.message_file {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::Event(f) => {
+                        for handler in &handlers.event {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::EnterChat(f) => {
+                        for handler in &handlers.event_enter_chat {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::TemplateCardEvent(f) => {
+                        for handler in &handlers.event_template_card {
+                            handler(&f);
+                        }
+                    }
+                    MessageEvent::FeedbackEvent(f) => {
+                        for handler in &handlers.event_feedback {
+                            handler(&f);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// 断开 WebSocket 连接
