@@ -144,10 +144,11 @@ mod tests {
     use super::*;
     use crate::logger::DefaultLogger;
     use serde_json::json;
+    use std::sync::Arc;
 
     #[test]
     fn test_handle_text_message() {
-        let logger = Box::new(DefaultLogger::default());
+        let logger = Arc::new(DefaultLogger::default());
         let handler = MessageHandler::new(logger);
 
         let frame = WsFrame {
@@ -170,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_handle_event_callback() {
-        let logger = Box::new(DefaultLogger::default());
+        let logger = Arc::new(DefaultLogger::default());
         let handler = MessageHandler::new(logger);
 
         let frame = WsFrame {

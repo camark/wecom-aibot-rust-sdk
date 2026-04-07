@@ -101,7 +101,8 @@ pub fn decrypt_file(encrypted_data: &[u8], aes_key: &str) -> Result<Vec<u8>, Sdk
 mod tests {
     use super::*;
     use aes::Aes256;
-    use cbc::cipher::{BlockEncryptMut, KeyIvInit, padding::Pkcs7Padding};
+    use cbc::cipher::{BlockEncryptMut, KeyIvInit};
+    use cbc::cipher::block_padding::Pkcs7;
 
     type Aes256CbcEnc = cbc::Encryptor<Aes256>;
 
@@ -124,10 +125,16 @@ mod tests {
             SdkError::Decryption("Failed to convert iv to array".to_string())
         })?;
 
+        let mut buf = data.to_vec();
+        let data_len = data.len();
+        // 扩展缓冲区以容纳 padding
+        buf.resize(((data_len + 15) / 16) * 16 + 16, 0);
+
         let cipher = Aes256CbcEnc::new(key_array.into(), iv_array.into());
         let encrypted = cipher
-            .encrypt_padded_vec_mut::<Pkcs7Padding>(data)
-            .map_err(|e| SdkError::Decryption(format!("Encryption failed: {}", e)))?;
+            .encrypt_padded_mut::<Pkcs7>(&mut buf, data_len)
+            .map_err(|e| SdkError::Decryption(format!("Encryption failed: {}", e)))?
+            .to_vec();
 
         Ok(encrypted)
     }

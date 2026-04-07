@@ -62,30 +62,30 @@ async fn main() {
 
     client.on_connected(|| {
         println!("WebSocket 已连接");
-    });
+    }).await;
 
     client.on_authenticated(|| {
         println!("认证成功");
-    });
+    }).await;
 
     client.on_disconnected(|reason| {
         println!("连接已断开：{}", reason);
-    });
+    }).await;
 
     client.on_reconnecting(|attempt| {
         println!("正在进行第 {} 次重连...", attempt);
-    });
+    }).await;
 
     client.on_error(|error| {
         eprintln!("发生错误：{}", error);
-    });
+    }).await;
 
     // ========== 消息事件 ==========
 
     client.on_message(|frame| {
         let body_str = serde_json::to_string_pretty(&frame.body).unwrap_or_default();
         println!("收到消息：{}", body_str.chars().take(200).collect::<String>());
-    });
+    }).await;
 
     let _client_text = client.clone();
     client.on_message_text(|frame| {
@@ -102,7 +102,7 @@ async fn main() {
         // 注意：实际使用中需要在异步上下文中调用 reply_stream
         // 这里仅做演示
         let _stream_id = generate_req_id("stream");
-    });
+    }).await;
 
     client.on_message_image(|frame| {
         let body = frame.body.as_ref().and_then(|v| v.as_object());
@@ -114,7 +114,7 @@ async fn main() {
             .unwrap_or("");
 
         println!("收到图片消息：{}", image_url);
-    });
+    }).await;
 
     client.on_message_mixed(|frame| {
         let body = frame.body.as_ref().and_then(|v| v.as_object());
@@ -127,7 +127,7 @@ async fn main() {
             .unwrap_or(0);
 
         println!("收到图文混排消息，包含 {} 个子项", items);
-    });
+    }).await;
 
     client.on_message_voice(|frame| {
         let body = frame.body.as_ref().and_then(|v| v.as_object());
@@ -139,7 +139,7 @@ async fn main() {
             .unwrap_or("");
 
         println!("收到语音消息（转文本）：{}", voice_content);
-    });
+    }).await;
 
     client.on_message_file(|frame| {
         let body = frame.body.as_ref().and_then(|v| v.as_object());
@@ -151,7 +151,7 @@ async fn main() {
             .unwrap_or("");
 
         println!("收到文件消息：{}", file_url);
-    });
+    }).await;
 
     // ========== 事件回调 ==========
 
@@ -159,7 +159,7 @@ async fn main() {
         println!("用户进入会话");
         // 注意：实际使用需要在异步上下文中调用 reply_welcome
         let _frame = frame;
-    });
+    }).await;
 
     client.on_event_template_card(|frame| {
         let body = frame.body.as_ref().and_then(|v| v.as_object());
@@ -173,7 +173,7 @@ async fn main() {
             .unwrap_or("");
 
         println!("收到模板卡片事件：{}", event_key);
-    });
+    }).await;
 
     client.on_event_feedback(|frame| {
         let body = frame.body.as_ref().and_then(|v| v.as_object());
@@ -183,7 +183,7 @@ async fn main() {
             "收到用户反馈事件：{}",
             serde_json::to_string_pretty(&event).unwrap_or_default()
         );
-    });
+    }).await;
 
     // ========== 启动 ==========
 

@@ -87,7 +87,6 @@ impl WeComApiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logger::DefaultLogger;
 
     #[test]
     fn test_parse_filename_simple() {

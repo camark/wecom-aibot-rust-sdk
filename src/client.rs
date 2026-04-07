@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::api::WeComApiClient;
 use crate::crypto_utils::decrypt_file;
@@ -37,7 +37,7 @@ pub struct WSClient {
     message_handler: Arc<MessageHandler>,
 
     // 事件处理器存储
-    event_handlers: Arc<RwLock<EventHandlers>>,
+    event_handlers: Arc<Mutex<EventHandlers>>,
 }
 
 /// 事件处理器集合
@@ -109,7 +109,7 @@ impl WSClient {
             api_client,
             ws_manager,
             message_handler,
-            event_handlers: Arc::new(RwLock::new(EventHandlers::default())),
+            event_handlers: Arc::new(Mutex::new(EventHandlers::default())),
         }
     }
 
@@ -129,17 +129,9 @@ impl WSClient {
         self.logger.info("Establishing WebSocket connection...");
         *started = true;
 
-        // 启动事件循环
-        self._start_event_loop();
-
         self.ws_manager.connect().await?;
 
         Ok(())
-    }
-
-    /// 启动事件循环，处理消息事件
-    fn _start_event_loop(&self) {
-        // 事件循环在收到消息时处理
     }
 
     /// 断开 WebSocket 连接
@@ -430,140 +422,151 @@ impl WSClient {
     }
 
     /// 注册事件处理器
-    pub fn on_connected<F>(&self, handler: F)
+    pub async fn on_connected<F>(&self, handler: F)
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.event_handlers.blocking_write().connected.push(Arc::new(handler));
+        self.event_handlers.lock().await.connected.push(Arc::new(handler));
     }
 
-    pub fn on_authenticated<F>(&self, handler: F)
+    pub async fn on_authenticated<F>(&self, handler: F)
     where
         F: Fn() + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .authenticated
             .push(Arc::new(handler));
     }
 
-    pub fn on_disconnected<F>(&self, handler: F)
+    pub async fn on_disconnected<F>(&self, handler: F)
     where
         F: Fn(&str) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .disconnected
             .push(Arc::new(handler));
     }
 
-    pub fn on_reconnecting<F>(&self, handler: F)
+    pub async fn on_reconnecting<F>(&self, handler: F)
     where
         F: Fn(usize) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .reconnecting
             .push(Arc::new(handler));
     }
 
-    pub fn on_error<F>(&self, handler: F)
+    pub async fn on_error<F>(&self, handler: F)
     where
         F: Fn(&SdkError) + Send + Sync + 'static,
     {
-        self.event_handlers.blocking_write().error.push(Arc::new(handler));
+        self.event_handlers.lock().await.error.push(Arc::new(handler));
     }
 
-    pub fn on_message<F>(&self, handler: F)
+    pub async fn on_message<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
-        self.event_handlers.blocking_write().message.push(Arc::new(handler));
+        self.event_handlers.lock().await.message.push(Arc::new(handler));
     }
 
-    pub fn on_message_text<F>(&self, handler: F)
+    pub async fn on_message_text<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .message_text
             .push(Arc::new(handler));
     }
 
-    pub fn on_message_image<F>(&self, handler: F)
+    pub async fn on_message_image<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .message_image
             .push(Arc::new(handler));
     }
 
-    pub fn on_message_mixed<F>(&self, handler: F)
+    pub async fn on_message_mixed<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .message_mixed
             .push(Arc::new(handler));
     }
 
-    pub fn on_message_voice<F>(&self, handler: F)
+    pub async fn on_message_voice<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .message_voice
             .push(Arc::new(handler));
     }
 
-    pub fn on_message_file<F>(&self, handler: F)
+    pub async fn on_message_file<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .message_file
             .push(Arc::new(handler));
     }
 
-    pub fn on_event<F>(&self, handler: F)
+    pub async fn on_event<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
-        self.event_handlers.blocking_write().event.push(Arc::new(handler));
+        self.event_handlers.lock().await.event.push(Arc::new(handler));
     }
 
-    pub fn on_event_enter_chat<F>(&self, handler: F)
+    pub async fn on_event_enter_chat<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .event_enter_chat
             .push(Arc::new(handler));
     }
 
-    pub fn on_event_template_card<F>(&self, handler: F)
+    pub async fn on_event_template_card<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .event_template_card
             .push(Arc::new(handler));
     }
 
-    pub fn on_event_feedback<F>(&self, handler: F)
+    pub async fn on_event_feedback<F>(&self, handler: F)
     where
         F: Fn(&WsFrame) + Send + Sync + 'static,
     {
         self.event_handlers
-            .blocking_write()
+            .lock()
+            .await
             .event_feedback
             .push(Arc::new(handler));
     }
