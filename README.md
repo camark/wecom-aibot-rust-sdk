@@ -26,8 +26,8 @@
 
 ```toml
 [dependencies]
-wecom-aibot-rust-sdk = "1.0"
-tokio = { version = "1", features = ["full"] }
+wecom-aibot-rust-sdk = "1.0.1"
+tokio = { version = "1.35", features = ["full"] }
 ```
 
 **依赖：**
@@ -36,8 +36,13 @@ tokio = { version = "1", features = ["full"] }
 - tokio-tungstenite >= 0.21
 - reqwest >= 0.11
 - serde >= 1.0
+- serde_json >= 1.0
 - aes >= 0.8
 - cbc >= 0.1
+- base64 >= 0.21
+- thiserror >= 1.0
+- futures >= 0.3
+- parking_lot >= 0.12
 
 ## ⚙️ 配置
 
@@ -269,6 +274,7 @@ let options = WSClientOptions {
 | `async update_template_card(frame, template_card, userids)` | 更新模板卡片，需在收到事件 5s 内调用 | `Result<WsFrame, SdkError>` |
 | `async send_message(chatid, body)` | 主动发送消息（支持 Markdown 或模板卡片），无需依赖回调帧 | `Result<WsFrame, SdkError>` |
 | `async download_file(url, aes_key)` | 下载文件并使用 AES 密钥解密 | `Result<(Vec<u8>, Option<String>), SdkError>` |
+| `async upload_media(media_type, file_data, filename)` | 上传临时素材（通过 WebSocket 分片上传） | `Result<serde_json::Value, SdkError>` |
 
 #### 属性
 
@@ -353,6 +359,36 @@ await client.send_message("userid_or_chatid", json!({
     "template_card": {"card_type": "text_notice", "main_title": {"title": "通知"}},
 }));
 ```
+
+### `upload_media` 上传临时素材
+
+通过 WebSocket 分片上传临时素材到企业微信，支持图片、语音、视频和文件。
+
+```rust
+use std::fs;
+
+// 读取文件
+let file_data = fs::read("test.pdf").unwrap();
+
+// 上传文件（media_type: "image", "voice", "video", "file"）
+match client.upload_media("file", &file_data, "test.pdf").await {
+    Ok(result) => {
+        let media_id = result.get("media_id").and_then(|v| v.as_str()).unwrap();
+        println!("上传成功，media_id: {}", media_id);
+    }
+    Err(e) => eprintln!("上传失败：{}", e),
+}
+```
+
+**文件大小限制：**
+| 类型 | 大小限制 | 格式 |
+| --- | --- | --- |
+| image | ≤10MB | JPG, PNG |
+| voice | ≤2MB | AMR (≤60s) |
+| video | ≤10MB | MP4 |
+| file | ≤10MB | - |
+
+**注意：** 临时素材 `media_id` 有效期为 3 天。
 
 ### `download_file` 使用示例
 
@@ -463,11 +499,12 @@ rust_wecom_bot_rust_sdk/
 │   ├── utils.rs           # 工具方法（generate_req_id 等）
 │   └── types.rs           # 类型定义（枚举、结构体、常量）
 ├── examples/
-│   ├── basic.rs           # 基础使用示例
-│   ├── echo_test.rs       # Echo 测试机器人
-│   ├── test_files.rs      # 文件/图片下载测试
-│   ├── sender_info.rs     # 消息发送人信息示例
-│   └── upload_media.rs    # 上传临时素材示例
+│   ├── basic.rs              # 基础使用示例
+│   ├── send_test_message.rs  # 发送测试消息示例
+│   ├── echo_test.rs          # Echo 测试机器人
+│   ├── test_files.rs         # 文件/图片下载测试
+│   ├── sender_info.rs        # 消息发送人信息示例
+│   └── upload_media.rs       # 上传临时素材示例
 ├── Cargo.toml             # 项目配置
 ├── README.md              # 本文件
 └── .env.example           # 环境变量示例
