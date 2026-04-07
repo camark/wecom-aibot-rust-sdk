@@ -48,3 +48,7 @@ dotenv = "0.15"
 [[example]]
 name = "basic"
 path = "examples/basic.rs"
+
+[[example]]
+name = "send_test_message"
+path = "examples/send_test_message.rs"
