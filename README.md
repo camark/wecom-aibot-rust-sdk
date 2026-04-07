@@ -46,8 +46,11 @@ tokio = { version = "1", features = ["full"] }
 cp .env.example .env
 
 # 编辑 .env 文件，填入真实配置
-# WECHAT_BOT_ID=your-bot-id
-# WECHAT_BOT_SECRET=your-bot-secret
+WECHAT_BOT_ID=your-bot-id
+WECHAT_BOT_SECRET=your-bot-secret
+
+# （可选）配置下载文件存放目录，不设置则使用系统 temp 目录
+WECHAT_BOT_DOWNLOAD_DIR=/path/to/download/dir
 ```
 
 ## 🚀 快速开始
@@ -400,7 +403,9 @@ rust_wecom_bot_rust_sdk/
 │   ├── utils.rs           # 工具方法（generate_req_id 等）
 │   └── types.rs           # 类型定义（枚举、结构体、常量）
 ├── examples/
-│   └── basic.rs           # 基础使用示例
+│   ├── basic.rs           # 基础使用示例
+│   ├── echo_test.rs       # Echo 测试机器人
+│   └── test_files.rs      # 文件/图片下载测试
 ├── Cargo.toml             # 项目配置
 ├── README.md              # 本文件
 └── .env.example           # 环境变量示例

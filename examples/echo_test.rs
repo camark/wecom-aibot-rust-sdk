@@ -100,10 +100,7 @@ async fn main() {
 
         println!("🖼️ 收到图片消息：{}", image_url);
 
-        // 克隆 frame 用于异步任务
         let frame = frame.clone();
-
-        // 回复收到图片的提示
         tokio::spawn(async move {
             let stream_id = generate_req_id("stream");
             let _ = client_image
@@ -134,10 +131,7 @@ async fn main() {
 
         println!("📁 收到文件消息：{}", file_url);
 
-        // 克隆 frame 用于异步任务
         let frame = frame.clone();
-
-        // 回复收到文件的提示
         tokio::spawn(async move {
             let stream_id = generate_req_id("stream");
             let _ = client_file

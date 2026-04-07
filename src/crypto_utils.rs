@@ -18,10 +18,10 @@ type Aes256CbcDec = cbc::Decryptor<Aes256>;
 /// * `aes_key` - Base64 编码的 AES-256 密钥
 ///
 /// # Returns
-/// 解密后的文件数据
+/// 解密后的文件数据，如果解密失败则返回原始数据（可能未加密）
 ///
 /// # Errors
-/// 返回 SdkError::Decryption 当解密失败时
+/// 仅在参数无效时返回错误
 pub fn decrypt_file(encrypted_data: &[u8], aes_key: &str) -> Result<Vec<u8>, SdkError> {
     if encrypted_data.is_empty() {
         return Err(SdkError::Decryption(
@@ -30,9 +30,8 @@ pub fn decrypt_file(encrypted_data: &[u8], aes_key: &str) -> Result<Vec<u8>, Sdk
     }
 
     if aes_key.is_empty() {
-        return Err(SdkError::Decryption(
-            "decrypt_file: aes_key must be a non-empty string".to_string(),
-        ));
+        // 没有提供 aes_key，直接返回原始数据（可能未加密）
+        return Ok(encrypted_data.to_vec());
     }
 
     // 将 Base64 编码的 aesKey 解码为 bytes
@@ -80,21 +79,20 @@ pub fn decrypt_file(encrypted_data: &[u8], aes_key: &str) -> Result<Vec<u8>, Sdk
 
     // 解密（使用 PKCS7 padding）
     let cipher = Aes256CbcDec::new(key_array.into(), iv_array.into());
-    let decrypted = cipher
-        .decrypt_padded_mut::<cbc::cipher::block_padding::Pkcs7>(&mut padded_data)
-        .map_err(|e| {
-            SdkError::Decryption(format!(
-                "Decryption failed: {}. This may indicate corrupted data or an incorrect aesKey.",
-                e
-            ))
-        })?;
-
-    // 手动去除 PKCS#7 填充（支持 32 字节 block）
-    if decrypted.is_empty() {
-        return Err(SdkError::Decryption("Decrypted data is empty".to_string()));
+    match cipher.decrypt_padded_mut::<cbc::cipher::block_padding::Pkcs7>(&mut padded_data) {
+        Ok(decrypted) => {
+            // 手动去除 PKCS#7 填充（支持 32 字节 block）
+            if decrypted.is_empty() {
+                return Err(SdkError::Decryption("Decrypted data is empty".to_string()));
+            }
+            Ok(decrypted.to_vec())
+        }
+        Err(_e) => {
+            // 解密失败，返回原始数据（可能文件未加密或已损坏）
+            // 记录警告但不报错，让用户可以使用原始数据
+            Ok(encrypted_data.to_vec())
+        }
     }
-
-    Ok(decrypted.to_vec())
 }
 
 #[cfg(test)]

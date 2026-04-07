@@ -52,3 +52,11 @@ path = "examples/basic.rs"
 [[example]]
 name = "send_test_message"
 path = "examples/send_test_message.rs"
+
+[[example]]
+name = "echo_test"
+path = "examples/echo_test.rs"
+
+[[example]]
+name = "test_files"
+path = "examples/test_files.rs"
