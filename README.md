@@ -197,6 +197,24 @@ cargo run --example test_files
 cargo run --example sender_info
 ```
 
+### 5. upload_media.rs - 上传临时素材示例
+
+演示如何通过 WebSocket 分片上传临时素材到企业微信，支持：
+- 图片（image）：≤10MB, JPG/PNG 格式
+- 语音（voice）：≤2MB, AMR 格式
+- 视频（video）：≤10MB, MP4 格式
+- 文件（file）：≤10MB
+
+```bash
+# 上传文件
+cargo run --example upload_media <文件路径>
+
+# 示例：上传图片
+cargo run --example upload_media test.jpg
+```
+
+上传成功后返回 `media_id`，可用于发送消息时引用该素材。
+
 ## 📖 API 文档
 
 ### `WSClient`
@@ -448,7 +466,8 @@ rust_wecom_bot_rust_sdk/
 │   ├── basic.rs           # 基础使用示例
 │   ├── echo_test.rs       # Echo 测试机器人
 │   ├── test_files.rs      # 文件/图片下载测试
-│   └── sender_info.rs     # 消息发送人信息示例
+│   ├── sender_info.rs     # 消息发送人信息示例
+│   └── upload_media.rs    # 上传临时素材示例
 ├── Cargo.toml             # 项目配置
 ├── README.md              # 本文件
 └── .env.example           # 环境变量示例

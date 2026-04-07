@@ -71,3 +71,11 @@ pub use utils::generate_req_id;
 
 /// SDK 版本号
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// 上传临时素材结果
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MediaUploadResult {
+    pub type_: String,
+    pub media_id: String,
+    pub created_at: i64,
+}

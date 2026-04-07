@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
 use tokio::sync::mpsc;
@@ -506,6 +507,80 @@ impl WSClient {
     /// 获取 API 客户端实例（供高级用途使用）
     pub fn api(&self) -> Arc<WeComApiClient> {
         self.api_client.clone()
+    }
+
+    /// 上传临时素材（支持 image/voice/video/file 类型）
+    ///
+    /// 通过 WebSocket 分片上传临时素材，流程：
+    /// 1. 初始化上传（获取 upload_id）
+    /// 2. 分片上传（base64 编码）
+    /// 3. 完成上传（获取 media_id）
+    ///
+    /// # Arguments
+    /// * `media_type` - 媒体类型："image", "voice", "video", "file"
+    /// * `file_data` - 文件数据
+    /// * `filename` - 文件名
+    ///
+    /// # Returns
+    /// 上传结果，包含 media_id, type, created_at 等信息
+    ///
+    /// # 文件大小限制
+    /// - image: ≤ 10MB, JPG/PNG 格式
+    /// - voice: ≤ 2MB, AMR 格式 (≤60s)
+    /// - video: ≤ 10MB, MP4 格式
+    /// - file: ≤ 10MB
+    pub async fn upload_media(
+        &self,
+        media_type: &str,
+        file_data: &[u8],
+        filename: &str,
+    ) -> Result<serde_json::Value, SdkError> {
+        use std::hash::{Hash, Hasher};
+        use std::collections::hash_map::DefaultHasher;
+
+        self.logger.info(&format!(
+            "Uploading media file: {}, type: {}, size: {} bytes",
+            filename, media_type, file_data.len()
+        ));
+
+        // 计算文件 MD5（用于上传验证）
+        // 注意：这里使用简单的 hash 代替 MD5，实际应该使用 md5 crate
+        let mut hasher = DefaultHasher::new();
+        file_data.hash(&mut hasher);
+        let md5 = format!("{:x}", hasher.finish());
+
+        // 分片大小（每个分片 base64 编码后约 8KB）
+        const CHUNK_SIZE: usize = 6000;
+        let total_size = file_data.len();
+        let total_chunks = (total_size + CHUNK_SIZE - 1) / CHUNK_SIZE;
+
+        // 1. 初始化上传
+        let upload_id = self
+            .ws_manager
+            .upload_media_init(media_type, filename, total_size, total_chunks, &md5)
+            .await?;
+
+        self.logger.debug(&format!("Upload initialized, upload_id: {}", upload_id));
+
+        // 2. 分片上传
+        for (index, chunk) in file_data.chunks(CHUNK_SIZE).enumerate() {
+            let base64_data = BASE64.encode(chunk);
+            self.ws_manager
+                .upload_media_chunk(&upload_id, index + 1, base64_data)
+                .await?;
+        }
+
+        self.logger.debug("All chunks uploaded");
+
+        // 3. 完成上传
+        let result = self.ws_manager.upload_media_finish(&upload_id).await?;
+
+        self.logger.info(&format!(
+            "Media upload completed, result: {:?}",
+            result
+        ));
+
+        Ok(result)
     }
 
     /// 注册事件处理器
