@@ -26,7 +26,7 @@
 
 ```toml
 [dependencies]
-wecom-aibot-rust-sdk = "1.0.1"
+wecom-aibot-rust-sdk = "1.0.2"
 tokio = { version = "1.35", features = ["full"] }
 ```
 
@@ -34,15 +34,22 @@ tokio = { version = "1.35", features = ["full"] }
 - Rust >= 1.70
 - tokio >= 1.35
 - tokio-tungstenite >= 0.21
+- tokio-stream >= 0.1
 - reqwest >= 0.11
 - serde >= 1.0
 - serde_json >= 1.0
 - aes >= 0.8
 - cbc >= 0.1
 - base64 >= 0.21
+- cpufeatures >= 0.2
 - thiserror >= 1.0
 - futures >= 0.3
 - parking_lot >= 0.12
+- rand >= 0.9
+- hex >= 0.4
+- chrono >= 0.4
+- regex >= 1.10
+- urlencoding >= 2.1
 
 ## ⚙️ 配置
 
