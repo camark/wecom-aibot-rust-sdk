@@ -1,0 +1,32 @@
+# 编译产物
+/target/
+**/target/
+
+# 二进制文件
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 锁文件（可选，通常提交 Cargo.lock）
+# Cargo.lock
+
+# 环境文件
+.env
+
+# 临时文件
+*.tmp
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
